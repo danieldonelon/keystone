@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keystone</title>
+<style>
+  :root {
+    --bg: #14120e;
+    --panel: #211d17;
+    --ink: #f3ecdf;
+    --muted: #a39886;
+    --line: #3c3428;
+    --copper: #e09a4f;
+    --good: #9cba78;
+    --bad: #d4785a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
+  body { font: 15px/1.45 "Segoe UI", "IBM Plex Sans", sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 16px 22px; border-bottom: 1px solid var(--line); }
+  .mark { width: 28px; height: 22px; }
+  h1 { font-size: 18px; font-weight: 650; letter-spacing: .04em; margin: 0; }
+  .sub { color: var(--muted); font-size: 13px; }
+  nav { display: flex; gap: 6px; margin-left: 18px; }
+  nav button, .btn { background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  nav button.on, .btn.primary { background: var(--copper); color: #23180d; border-color: var(--copper); }
+  main { padding: 22px; max-width: 1100px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+  .name { font-size: 18px; }
+  .meta { color: var(--muted); font-size: 13px; margin: 4px 0 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; background: var(--bad); }
+  .dot.on { background: var(--good); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+  td button.link { background: none; border: 0; color: var(--ink); cursor: pointer; padding: 0; font: inherit; }
+  input, select { background: #16130f; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+  #screen { background: #000; min-height: 480px; display: flex; align-items: center; justify-content: center; border-radius: 12px; overflow: hidden; }
+  canvas { max-width: 100%; height: auto; cursor: crosshair; }
+  pre { white-space: pre-wrap; background: #16130f; padding: 12px; border-radius: 10px; color: var(--copper); }
+  .err { color: var(--bad); min-height: 1.2em; }
+  .hide { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <svg class="mark" viewBox="0 0 64 48" aria-hidden="true"><path d="M6 46 L18 8 H46 L58 46 Z" fill="#e09a4f"/><path d="M24 46 V22 H40 V46 Z" fill="#14120e"/></svg>
+  <div>
+    <h1>KEYSTONE</h1>
+    <div class="sub" id="bypass">Checking the network…</div>
+  </div>
+  <nav>
+    <button id="tab-machines" class="on">Machines</button>
+    <button id="tab-files">Files</button>
+    <button id="tab-screen">Screen</button>
+  </nav>
+</header>
+<main>
+  <section id="view-machines">
+    <div class="grid" id="cards"></div>
+    <h2>Add a computer</h2>
+    <p class="sub">Run this on a Raspberry Pi or another PC. Give the Pi a name in place of <b>pi</b>.</p>
+    <pre id="join">Loading…</pre>
+  </section>
+  <section id="view-files" class="hide">
+    <div class="row">
+      <select id="file-peer"></select>
+      <span id="crumbs"></span>
+      <button class="btn" id="up-folder">Up</button>
+      <button class="btn" id="mkdir">New folder</button>
+      <label class="btn primary">Upload<input id="upload" type="file" multiple hidden></label>
+    </div>
+    <p class="sub">Shared from <span id="share-label"></span> <button class="btn" id="change-share">Change</button></p>
+    <p class="err" id="file-err"></p>
+    <table><thead><tr><th>Name</th><th>Size</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+  </section>
+  <section id="view-screen" class="hide">
+    <div class="row">
+      <select id="screen-peer"></select>
+      <input id="vnc-pass" type="password" placeholder="VNC password, if it has one">
+      <button class="btn primary" id="connect">Connect</button>
+      <button class="btn" id="disconnect">Disconnect</button>
+    </div>
+    <p class="err" id="screen-err"></p>
+    <div id="screen"><canvas id="canvas" tabindex="0"></canvas></div>
+  </section>
+</main>
+<script>
+const TOKEN = "KEYSTONE_LOCAL_TOKEN";
+const headers = { "X-Keystone": TOKEN };
+let peers = [];
+let filePath = "";
+let ws, rfbStop;
+
+async function api(path, opt = {}) {
+  const res = await fetch(path, { ...opt, headers: { ...headers, ...(opt.headers || {}) } });
+  if (!res.ok) throw new Error((await res.text()) || res.statusText);
+  const t = res.headers.get("content-type") || "";
+  if (t.includes("json")) return res.json();
+  return res;
+}
+
+function show(name) {
+  for (const id of ["machines", "files", "screen"]) {
+    document.getElementById("view-" + id).classList.toggle("hide", id !== name);
+    document.getElementById("tab-" + id).classList.toggle("on", id === name);
+  }
+}
+document.getElementById("tab-machines").onclick = () => show("machines");
+document.getElementById("tab-files").onclick = () => { show("files"); loadFiles(); };
+document.getElementById("tab-screen").onclick = () => show("screen");
+
+function fillSelects() {
+  for (const id of ["file-peer", "screen-peer"]) {
+    const sel = document.getElementById(id);
+    const cur = sel.value;
+    sel.innerHTML = "";
+    for (const p of peers) {
+      const o = document.createElement("option");
+      o.value = p.name; o.textContent = p.name + (p.self ? " (this computer)" : "");
+      sel.appendChild(o);
+    }
+    if (cur) sel.value = cur;
+  }
+}
+
+async function refresh() {
+  const st = await api("/api/status");
+  document.getElementById("bypass").textContent = st.bypass;
+  document.getElementById("share-label").textContent = st.share;
+  const data = await api("/api/peers");
+  peers = data.peers || [];
+  const cards = document.getElementById("cards");
+  cards.innerHTML = "";
+  for (const p of peers) {
+    const el = document.createElement("article");
+    el.className = "card";
+    el.innerHTML = `<div class="name"><span class="dot ${p.online ? "on" : ""}"></span>${escapeHtml(p.name)}</div>
+      <div class="meta">${escapeHtml(p.os || "")} · ${escapeHtml(p.mesh_ip || "")}</div>`;
+    const row = document.createElement("div");
+    row.className = "row";
+    const files = button("Files", () => { document.getElementById("file-peer").value = p.name; show("files"); filePath = ""; loadFiles(); });
+    const screen = button("Screen", () => { document.getElementById("screen-peer").value = p.name; show("screen"); connect(); });
+    row.append(files, screen);
+    el.appendChild(row);
+    cards.appendChild(el);
+  }
+  fillSelects();
+  const join = await api("/api/join");
+  document.getElementById("join").textContent = join.command || "This computer joined an existing Keystone network.";
+}
+
+function button(label, fn) {
+  const b = document.createElement("button");
+  b.className = "btn"; b.textContent = label; b.onclick = fn; return b;
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+async function loadFiles() {
+  const peer = document.getElementById("file-peer").value;
+  const err = document.getElementById("file-err");
+  err.textContent = "";
+  try {
+    const data = await api("/api/files?peer=" + encodeURIComponent(peer) + "&path=" + encodeURIComponent(filePath));
+    filePath = data.path || "";
+    document.getElementById("crumbs").textContent = "/" + filePath;
+    const rows = document.getElementById("rows");
+    rows.innerHTML = "";
+    for (const e of data.entries || []) {
+      const tr = document.createElement("tr");
+      const name = document.createElement("td");
+      const b = document.createElement("button");
+      b.className = "link"; b.textContent = (e.dir ? "📁 " : "") + e.name;
+      b.onclick = () => {
+        if (e.dir) { filePath = (filePath ? filePath + "/" : "") + e.name; loadFiles(); }
+        else download(peer, (filePath ? filePath + "/" : "") + e.name, e.name);
+      };
+      name.appendChild(b);
+      const size = document.createElement("td");
+      size.textContent = e.dir ? "" : formatSize(e.size);
+      const act = document.createElement("td");
+      const del = button("Delete", async () => {
+        if (!confirm("Delete " + e.name + "?")) return;
+        await api("/api/delete?peer=" + encodeURIComponent(peer) + "&path=" + encodeURIComponent((filePath ? filePath + "/" : "") + e.name), { method: "DELETE" });
+        loadFiles();
+      });
+      act.appendChild(del);
+      tr.append(name, size, act);
+      rows.appendChild(tr);
+    }
+  } catch (ex) { err.textContent = ex.message; }
+}
+
+function formatSize(n) {
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
+  return (n / 1048576).toFixed(1) + " MB";
+}
+
+async function download(peer, path, name) {
+  const res = await api("/api/download?peer=" + encodeURIComponent(peer) + "&path=" + encodeURIComponent(path));
+  const blob = await res.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+}
+
+document.getElementById("up-folder").onclick = () => {
+  filePath = filePath.split("/").slice(0, -1).join("/");
+  loadFiles();
+};
+document.getElementById("file-peer").onchange = () => { filePath = ""; loadFiles(); };
+document.getElementById("mkdir").onclick = async () => {
+  const name = prompt("Folder name");
+  if (!name) return;
+  const peer = document.getElementById("file-peer").value;
+  const path = (filePath ? filePath + "/" : "") + name;
+  await api("/api/mkdir?peer=" + encodeURIComponent(peer) + "&path=" + encodeURIComponent(path), { method: "POST" });
+  loadFiles();
+};
+document.getElementById("upload").onchange = async (ev) => {
+  const peer = document.getElementById("file-peer").value;
+  for (const file of ev.target.files) {
+    const path = (filePath ? filePath + "/" : "") + file.name;
+    await fetch("/api/upload?peer=" + encodeURIComponent(peer) + "&path=" + encodeURIComponent(path), { method: "PUT", headers, body: file });
+  }
+  ev.target.value = "";
+  loadFiles();
+};
+document.getElementById("change-share").onclick = async () => {
+  const root = prompt("Folder to share", document.getElementById("share-label").textContent);
+  if (!root) return;
+  await api("/api/share?root=" + encodeURIComponent(root), { method: "POST" });
+  refresh();
+};
+
+document.getElementById("connect").onclick = connect;
+document.getElementById("disconnect").onclick = () => { if (rfbStop) rfbStop(); };
+
+function connect() {
+  if (rfbStop) rfbStop();
+  const peer = document.getElementById("screen-peer").value;
+  const password = document.getElementById("vnc-pass").value;
+  const err = document.getElementById("screen-err");
+  err.textContent = "";
+  const canvas = document.getElementById("canvas");
+  const url = `ws://${location.host}/api/vnc?peer=${encodeURIComponent(peer)}&token=${encodeURIComponent(TOKEN)}&password=${encodeURIComponent(password)}`;
+  rfbStop = startRFB(url, canvas, (e) => { err.textContent = e; });
+}
+
+function startRFB(url, canvas, onError) {
+  const sock = new WebSocket(url);
+  sock.binaryType = "arraybuffer";
+  const ctx = canvas.getContext("2d");
+  let buf = new Uint8Array(0);
+  let wait = null;
+  let stopped = false;
+  const queue = [];
+  function append(data) {
+    const next = new Uint8Array(buf.length + data.length);
+    next.set(buf); next.set(data, buf.length); buf = next;
+    if (wait && buf.length >= wait.n) { const fn = wait.fn; wait = null; fn(); }
+  }
+  sock.onmessage = (ev) => append(new Uint8Array(ev.data));
+  sock.onerror = () => onError("The screen connection failed.");
+  sock.onclose = () => { if (!stopped) onError("Screen disconnected."); };
+  function need(n) {
+    return new Promise((resolve) => {
+      if (buf.length >= n) resolve();
+      else wait = { n, fn: resolve };
+    });
+  }
+  function take(n) { const out = buf.slice(0, n); buf = buf.slice(n); return out; }
+  function u16(b, o) { return (b[o] << 8) | b[o + 1]; }
+  function u32(b, o) { return (b[o] * 16777216) + (b[o + 1] << 16) + (b[o + 2] << 8) + b[o + 3]; }
+  const img = () => ctx.getImageData(0, 0, canvas.width, canvas.height);
+  function blit(x, y, w, h, pix) {
+    const image = img();
+    for (let row = 0; row < h; row++) {
+      for (let col = 0; col < w; col++) {
+        const s = (row * w + col) * 4;
+        const d = ((y + row) * canvas.width + (x + col)) * 4;
+        image.data[d] = pix[s + 2]; image.data[d + 1] = pix[s + 1]; image.data[d + 2] = pix[s]; image.data[d + 3] = 255;
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+  }
+  function fill(x, y, w, h, c) {
+    const pix = new Uint8Array(w * h * 4);
+    for (let i = 0; i < pix.length; i += 4) pix.set(c, i);
+    blit(x, y, w, h, pix);
+  }
+  async function hextile(rx, ry, rw, rh) {
+    for (let ty = 0; ty < rh; ty += 16) {
+      for (let tx = 0; tx < rw; tx += 16) {
+        const tw = Math.min(16, rw - tx), th = Math.min(16, rh - ty);
+        await need(1); const mask = take(1)[0];
+        if (mask & 1) { await need(tw * th * 4); blit(rx + tx, ry + ty, tw, th, take(tw * th * 4)); continue; }
+        let bg = [0, 0, 0, 255], fg = [0, 0, 0, 255];
+        if (mask & 2) { await need(4); bg = take(4); }
+        if (mask & 4) { await need(4); fg = take(4); }
+        fill(rx + tx, ry + ty, tw, th, bg);
+        if (mask & 8) {
+          await need(1); const n = take(1)[0];
+          for (let i = 0; i < n; i++) {
+            let color = fg;
+            if (mask & 16) { await need(4); color = take(4); }
+            await need(2); const wh = take(2);
+            const sx = wh[0] >> 4, sy = wh[0] & 15, sw = (wh[1] >> 4) + 1, sh = (wh[1] & 15) + 1;
+            fill(rx + tx + sx, ry + ty + sy, sw, sh, color);
+          }
+        }
+      }
+    }
+  }
+  function send(bytes) { if (sock.readyState === 1) sock.send(bytes); }
+  async function run() {
+    await need(12); take(12);
+    send(new TextEncoder().encode("RFB 003.008\n"));
+    await need(2); take(2);
+    send(new Uint8Array([1]));
+    await need(4); take(4);
+    send(new Uint8Array([1]));
+    await need(24); const init = take(24);
+    const w = u16(init, 0), h = u16(init, 2);
+    const nameLen = u32(init, 20);
+    await need(nameLen); take(nameLen);
+    canvas.width = w; canvas.height = h;
+    ctx.fillStyle = "#000"; ctx.fillRect(0, 0, w, h);
+    const enc = new Uint8Array(4 + 4 * 3);
+    enc[0] = 2; enc[3] = 3;
+    enc.set([0, 0, 0, 0], 4);
+    enc.set([0, 0, 0, 5], 8);
+    enc.set([0xff, 0xff, 0xff, 0x21], 12);
+    send(enc);
+    const ask = () => {
+      const r = new Uint8Array(10);
+      r[0] = 3; r[6] = w >> 8; r[7] = w & 255; r[8] = h >> 8; r[9] = h & 255;
+      send(r);
+    };
+    ask();
+    while (!stopped && sock.readyState === 1) {
+      await need(4); const hdr = take(4);
+      if (hdr[0] !== 0) throw new Error("unexpected server message " + hdr[0]);
+      let n = u16(hdr, 2);
+      for (let i = 0; i < n; i++) {
+        await need(12); const rh = take(12);
+        const x = u16(rh, 0), y = u16(rh, 2), rw = u16(rh, 4), rhgt = u16(rh, 6);
+        const encoding = (rh[8] << 24) | (rh[9] << 16) | (rh[10] << 8) | rh[11];
+        if (encoding === 0) { await need(rw * rhgt * 4); blit(x, y, rw, rhgt, take(rw * rhgt * 4)); }
+        else if (encoding === 1) { await need(4); take(4); }
+        else if (encoding === 5) await hextile(x, y, rw, rhgt);
+        else throw new Error("unsupported encoding " + encoding);
+      }
+      ask();
+    }
+  }
+  canvas.onmousedown = canvas.onmouseup = canvas.onmousemove = (ev) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.max(0, Math.min(canvas.width - 1, (ev.clientX - rect.left) * canvas.width / rect.width));
+    const y = Math.max(0, Math.min(canvas.height - 1, (ev.clientY - rect.top) * canvas.height / rect.height));
+    let buttons = 0;
+    if (ev.buttons & 1) buttons |= 1;
+    if (ev.buttons & 4) buttons |= 2;
+    if (ev.buttons & 2) buttons |= 4;
+    const m = new Uint8Array(6);
+    m[0] = 5; m[1] = buttons; m[2] = x >> 8; m[3] = x & 255; m[4] = y >> 8; m[5] = y & 255;
+    send(m);
+  };
+  canvas.oncontextmenu = (e) => e.preventDefault();
+  canvas.onwheel = (ev) => {
+    ev.preventDefault();
+    const bit = ev.deltaY < 0 ? 8 : 16;
+    const rect = canvas.getBoundingClientRect();
+    const x = (ev.clientX - rect.left) * canvas.width / rect.width;
+    const y = (ev.clientY - rect.top) * canvas.height / rect.height;
+    for (const buttons of [bit, 0]) {
+      const m = new Uint8Array(6);
+      m[0] = 5; m[1] = buttons; m[2] = x >> 8; m[3] = x & 255; m[4] = y >> 8; m[5] = y & 255;
+      send(m);
+    }
+  };
+  const keys = { Escape: 0xff1b, Tab: 0xff09, Enter: 0xff0d, Backspace: 0xff08, Delete: 0xffff, Home: 0xff50, End: 0xff57, PageUp: 0xff55, PageDown: 0xff56, ArrowLeft: 0xff51, ArrowUp: 0xff52, ArrowRight: 0xff53, ArrowDown: 0xff54, ShiftLeft: 0xffe1, ShiftRight: 0xffe2, ControlLeft: 0xffe3, ControlRight: 0xffe4, AltLeft: 0xffe9, AltRight: 0xffea, MetaLeft: 0xffeb };
+  canvas.onkeydown = canvas.onkeyup = (ev) => {
+    ev.preventDefault();
+    let sym = keys[ev.code];
+    if (sym == null && ev.key.length === 1) sym = ev.key.codePointAt(0);
+    if (ev.code.startsWith("F") && ev.code.length <= 3) { const n = Number(ev.code.slice(1)); if (n >= 1 && n <= 12) sym = 0xffbe + n - 1; }
+    if (sym == null) return;
+    const m = new Uint8Array(8);
+    m[0] = 4; m[1] = ev.type === "keydown" ? 1 : 0;
+    m[4] = (sym >>> 24) & 255; m[5] = (sym >>> 16) & 255; m[6] = (sym >>> 8) & 255; m[7] = sym & 255;
+    send(m);
+  };
+  sock.onopen = () => { canvas.focus(); run().catch((e) => onError(e.message)); };
+  return () => { stopped = true; sock.close(); };
+}
+
+refresh().catch((e) => { document.getElementById("bypass").textContent = e.message; });
+setInterval(() => refresh().catch(() => {}), 8000);
+</script>
+</body>
+</html>
