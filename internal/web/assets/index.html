@@ -4,27 +4,52 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Keystone</title>
+<script>
+(function () {
+  var query = new URLSearchParams(location.search).get("theme");
+  var saved = localStorage.getItem("keystone-theme");
+  var theme = query === "light" || query === "dark" ? query : (saved || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
+  document.documentElement.setAttribute("data-theme", theme);
+})();
+</script>
 <style>
-  :root {
-    --bg: #14120e;
-    --panel: #211d17;
-    --ink: #f3ecdf;
-    --muted: #a39886;
-    --line: #3c3428;
-    --copper: #e09a4f;
-    --good: #9cba78;
-    --bad: #d4785a;
+  :root, [data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0d0d0d;
+    --panel: #141414;
+    --ink: #f4f7f6;
+    --muted: #9aa8a5;
+    --line: #242424;
+    --field: #121212;
+    --mint: #7bffec;
+    --code: #7bffec;
+    --good: #7bffec;
+    --bad: #e07070;
+  }
+  [data-theme="light"] {
+    color-scheme: light;
+    --bg: #f4f7f6;
+    --panel: #ffffff;
+    --ink: #0d0d0d;
+    --muted: #5c6b70;
+    --line: #c5d0cb;
+    --field: #ffffff;
+    --mint: #7bffec;
+    --code: #0f6f68;
+    --good: #147a62;
+    --bad: #b64040;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
   body { font: 15px/1.45 "Segoe UI", "IBM Plex Sans", sans-serif; }
   header { display: flex; align-items: center; gap: 16px; padding: 16px 22px; border-bottom: 1px solid var(--line); }
-  .mark { width: 28px; height: 22px; }
+  .mark { width: 36px; height: 30px; flex: none; }
   h1 { font-size: 18px; font-weight: 650; letter-spacing: .04em; margin: 0; }
   .sub { color: var(--muted); font-size: 13px; }
   nav { display: flex; gap: 6px; margin-left: 18px; }
+  #theme { margin-left: auto; }
   nav button, .btn { background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
-  nav button.on, .btn.primary { background: var(--copper); color: #23180d; border-color: var(--copper); }
+  nav button.on, .btn.primary { background: #0d0d0d; color: #7bffec; border-color: #7bffec; }
   main { padding: 22px; max-width: 1100px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
@@ -36,17 +61,17 @@
   table { width: 100%; border-collapse: collapse; }
   td, th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
   td button.link { background: none; border: 0; color: var(--ink); cursor: pointer; padding: 0; font: inherit; }
-  input, select { background: #16130f; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
-  #screen { background: #000; min-height: 480px; display: flex; align-items: center; justify-content: center; border-radius: 12px; overflow: hidden; }
+  input, select { background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+  #screen { background: #000; min-height: 480px; display: flex; align-items: center; justify-content: center; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
   canvas { max-width: 100%; height: auto; cursor: crosshair; }
-  pre { white-space: pre-wrap; background: #16130f; padding: 12px; border-radius: 10px; color: var(--copper); }
+  pre { white-space: pre-wrap; background: var(--field); padding: 12px; border-radius: 10px; border: 1px solid var(--line); color: var(--code); }
   .err { color: var(--bad); min-height: 1.2em; }
   .hide { display: none; }
 </style>
 </head>
 <body>
 <header>
-  <svg class="mark" viewBox="0 0 64 48" aria-hidden="true"><path d="M6 46 L18 8 H46 L58 46 Z" fill="#e09a4f"/><path d="M24 46 V22 H40 V46 Z" fill="#14120e"/></svg>
+  <svg class="mark" viewBox="0 0 64 52" role="img" aria-label="Keystone"><path fill="#0D0D0D" stroke="#7BFFEC" stroke-width="2.75" stroke-linejoin="round" fill-rule="evenodd" d="M8 48 L19 8 H45 L56 48 Z M26 48 V24 H38 V48 Z"/></svg>
   <div>
     <h1>KEYSTONE</h1>
     <div class="sub" id="bypass">Checking the network…</div>
@@ -56,6 +81,7 @@
     <button id="tab-files">Files</button>
     <button id="tab-screen">Screen</button>
   </nav>
+  <button id="theme" class="btn" type="button">Light mode</button>
 </header>
 <main>
   <section id="view-machines">
@@ -88,6 +114,20 @@
   </section>
 </main>
 <script>
+const themeButton = document.getElementById("theme");
+function paintThemeButton() {
+  const dark = document.documentElement.getAttribute("data-theme") !== "light";
+  themeButton.textContent = dark ? "Light mode" : "Dark mode";
+  themeButton.setAttribute("aria-pressed", dark ? "true" : "false");
+}
+paintThemeButton();
+themeButton.onclick = () => {
+  const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem("keystone-theme", next);
+  paintThemeButton();
+};
+
 const TOKEN = "KEYSTONE_LOCAL_TOKEN";
 const headers = { "X-Keystone": TOKEN };
 let peers = [];

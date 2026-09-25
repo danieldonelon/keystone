@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	Version      = "0.1.0"
+	Version      = "0.1.1"
 	MeshCIDR     = "10.91.0.0/16"
 	MeshFilePort = 7760
 	MeshVNCPort  = 5900

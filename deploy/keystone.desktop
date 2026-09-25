@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Keystone
+GenericName=Private mesh
+Comment=Open the Keystone window
+Exec=/usr/local/bin/keystone-launch
+Icon=keystone
+Terminal=false
+Categories=Network;
+StartupNotify=true

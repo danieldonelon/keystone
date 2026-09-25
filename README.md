@@ -37,20 +37,30 @@ keystone init --name laptop
 keystone up
 ```
 
-A browser opens at `http://127.0.0.1:8731`. The page shows the `keystone join` command for your other computers. The shared folder defaults to your home directory. Change it in the Files view.
+Or double-click the Keystone icon on the desktop. The icon starts Keystone when it is stopped, and opens the window when it is already running. Put the icon back with:
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\install-windows-shortcut.ps1
+```
+
+A browser opens at `http://127.0.0.1:8731`. The page shows the `keystone join` command for your other computers. The shared folder defaults to your home directory. Change it in the Files view. Light mode and Dark mode are in the header.
 
 Leave this computer running. It is the coordinator the others register with.
+
+The full guide is [docs/Keystone-User-Manual.pdf](docs/Keystone-User-Manual.pdf).
 
 ## Repository
 
 ```
 cmd/keystone/     the keystone command
 internal/         mesh, files, screen viewer, and the local window
-deploy/           systemd unit used by the Pi service
-scripts/          build.ps1 for Windows, install-pi.sh for the Pi
+assets/           desktop icon, black with a MojoSoMint mint outline
+deploy/           systemd unit and the Pi desktop entry
+docs/             Keystone-User-Manual.pdf
+scripts/          Windows shortcut, Pi installer, icon and manual builders
 ```
 
-Built programs stay out of git. Tagged releases on GitHub carry `keystone-linux-arm64`, `keystone-linux-armv7`, `keystone-linux-amd64`, and `keystone.exe`.
+Built programs stay out of git. Release [v0.1.1](https://github.com/danieldonelon/keystone/releases/tag/v0.1.1) carries the programs, the desktop icon, and the user manual.
 
 ## Raspberry Pi
 
@@ -58,16 +68,18 @@ Built programs stay out of git. Tagged releases on GitHub carry `keystone-linux-
 
 ```sh
 curl -fL -o keystone-linux-arm64 \
-  https://github.com/danieldonelon/keystone/releases/download/v0.1.0/keystone-linux-arm64
+  https://github.com/danieldonelon/keystone/releases/download/v0.1.1/keystone-linux-arm64
+curl -fL -o keystone.png \
+  https://github.com/danieldonelon/keystone/releases/download/v0.1.1/keystone.png
 curl -fL -o install-pi.sh \
-  https://raw.githubusercontent.com/danieldonelon/keystone/v0.1.0/scripts/install-pi.sh
+  https://raw.githubusercontent.com/danieldonelon/keystone/v0.1.1/scripts/install-pi.sh
 chmod +x keystone-linux-arm64
 sudo KEYSTONE_HOME=/var/lib/keystone ./keystone-linux-arm64 join --name pi \
   --coordinator https://192.168.0.130:7707 --token TOKEN --pin PIN --share /home/pi
 sudo sh install-pi.sh ./keystone-linux-arm64
 ```
 
-Use `keystone-linux-armv7` instead on a 32-bit Pi. The coordinator address, token, and pin come from `keystone init` on the laptop, and they are shown again in the Keystone window.
+The installer also puts a Keystone icon on the Pi desktop and in the application menu. Use `keystone-linux-armv7` instead on a 32-bit Pi. The coordinator address, token, and pin come from `keystone init` on the laptop, and they are shown again in the Keystone window.
 
 To build on the Pi from source instead:
 

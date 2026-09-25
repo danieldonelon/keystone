@@ -1,0 +1,26 @@
+#!/bin/sh
+# Open the Keystone window on this computer. Start the service if it is installed and stopped.
+WEB="http://127.0.0.1:8731/"
+
+if ! curl -fsS -o /dev/null --max-time 2 "$WEB" 2>/dev/null; then
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl start keystone >/dev/null 2>&1 || sudo -n systemctl start keystone >/dev/null 2>&1 || true
+    i=0
+    while [ "$i" -lt 20 ]; do
+      if curl -fsS -o /dev/null --max-time 1 "$WEB" 2>/dev/null; then
+        break
+      fi
+      i=$((i + 1))
+      sleep 0.25
+    done
+  fi
+fi
+
+if command -v xdg-open >/dev/null 2>&1; then
+  xdg-open "$WEB"
+elif command -v gio >/dev/null 2>&1; then
+  gio open "$WEB"
+else
+  echo "Keystone is at $WEB" >&2
+  exit 1
+fi
