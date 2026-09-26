@@ -62,8 +62,14 @@
   td, th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
   td button.link { background: none; border: 0; color: var(--ink); cursor: pointer; padding: 0; font: inherit; }
   input, select { background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
-  #screen { background: #000; min-height: 480px; display: flex; align-items: center; justify-content: center; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
-  canvas { max-width: 100%; height: auto; cursor: crosshair; }
+  body.view-screen main { max-width: none; height: calc(100vh - 70px); display: flex; flex-direction: column; box-sizing: border-box; }
+  #view-screen:not(.hide) { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  #screen { position: relative; background: #000; flex: 1; min-height: 280px; display: flex; align-items: center; justify-content: center; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+  #screen canvas { display: block; cursor: crosshair; background: #000; }
+  #screen:fullscreen, #screen:-webkit-full-screen { width: 100vw; height: 100vh; border: 0; border-radius: 0; }
+  #exit-full { display: none; position: absolute; top: 14px; right: 14px; z-index: 2; background: #0d0d0d; color: #7bffec; border: 1px solid #7bffec; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  #screen:fullscreen #exit-full, #screen:-webkit-full-screen #exit-full { display: block; opacity: 0.35; }
+  #screen:fullscreen:hover #exit-full, #screen:-webkit-full-screen:hover #exit-full { opacity: 1; }
   pre { white-space: pre-wrap; background: var(--field); padding: 12px; border-radius: 10px; border: 1px solid var(--line); color: var(--code); }
   .err { color: var(--bad); min-height: 1.2em; }
   .hide { display: none; }
@@ -107,10 +113,11 @@
       <select id="screen-peer"></select>
       <input id="vnc-pass" type="password" placeholder="VNC password, if it has one">
       <button class="btn primary" id="connect">Connect</button>
+      <button class="btn" id="fullscreen" type="button">Full screen</button>
       <button class="btn" id="disconnect">Disconnect</button>
     </div>
     <p class="err" id="screen-err"></p>
-    <div id="screen"><canvas id="canvas" tabindex="0"></canvas></div>
+    <div id="screen"><canvas id="canvas" tabindex="0"></canvas><button id="exit-full" type="button">Exit full screen</button></div>
   </section>
 </main>
 <script>
@@ -147,6 +154,8 @@ function show(name) {
     document.getElementById("view-" + id).classList.toggle("hide", id !== name);
     document.getElementById("tab-" + id).classList.toggle("on", id === name);
   }
+  document.body.classList.toggle("view-screen", name === "screen");
+  if (name === "screen" && window.fitKeystoneScreen) window.fitKeystoneScreen();
 }
 document.getElementById("tab-machines").onclick = () => show("machines");
 document.getElementById("tab-files").onclick = () => { show("files"); loadFiles(); };
@@ -277,6 +286,30 @@ document.getElementById("change-share").onclick = async () => {
 
 document.getElementById("connect").onclick = connect;
 document.getElementById("disconnect").onclick = () => { if (rfbStop) rfbStop(); };
+const screenStage = document.getElementById("screen");
+const fullscreenButton = document.getElementById("fullscreen");
+function paintFullscreenButton() {
+  const on = document.fullscreenElement === screenStage;
+  fullscreenButton.textContent = on ? "Exit full screen" : "Full screen";
+}
+async function toggleFullscreen() {
+  if (document.fullscreenElement) await document.exitFullscreen();
+  else await screenStage.requestFullscreen();
+  document.getElementById("canvas").focus();
+}
+fullscreenButton.onclick = () => { toggleFullscreen().catch((e) => { document.getElementById("screen-err").textContent = e.message; }); };
+document.getElementById("exit-full").onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); };
+document.addEventListener("fullscreenchange", () => { paintFullscreenButton(); if (window.fitKeystoneScreen) window.fitKeystoneScreen(); });
+window.fitKeystoneScreen = () => {
+  const canvas = document.getElementById("canvas");
+  if (canvas.dataset.ready !== "1" || !canvas.width || !canvas.height) return;
+  const bounds = screenStage.getBoundingClientRect();
+  const scale = Math.min(bounds.width / canvas.width, bounds.height / canvas.height);
+  if (!Number.isFinite(scale) || scale <= 0) return;
+  canvas.style.width = Math.max(1, Math.floor(canvas.width * scale)) + "px";
+  canvas.style.height = Math.max(1, Math.floor(canvas.height * scale)) + "px";
+};
+window.addEventListener("resize", () => window.fitKeystoneScreen());
 
 function connect() {
   if (rfbStop) rfbStop();
@@ -367,6 +400,9 @@ function startRFB(url, canvas, onError) {
     const nameLen = u32(init, 20);
     await need(nameLen); take(nameLen);
     canvas.width = w; canvas.height = h;
+    canvas.dataset.ready = "1";
+    ctx.imageSmoothingEnabled = true;
+    if (window.fitKeystoneScreen) window.fitKeystoneScreen();
     ctx.fillStyle = "#000"; ctx.fillRect(0, 0, w, h);
     const enc = new Uint8Array(4 + 4 * 3);
     enc[0] = 2; enc[3] = 3;
@@ -396,25 +432,32 @@ function startRFB(url, canvas, onError) {
       ask();
     }
   }
-  canvas.onmousedown = canvas.onmouseup = canvas.onmousemove = (ev) => {
+  function remotePoint(ev) {
     const rect = canvas.getBoundingClientRect();
-    const x = Math.max(0, Math.min(canvas.width - 1, (ev.clientX - rect.left) * canvas.width / rect.width));
-    const y = Math.max(0, Math.min(canvas.height - 1, (ev.clientY - rect.top) * canvas.height / rect.height));
+    if (!rect.width || !rect.height || !canvas.width || !canvas.height) return { x: 0, y: 0 };
+    const x = Math.round((ev.clientX - rect.left) * canvas.width / rect.width);
+    const y = Math.round((ev.clientY - rect.top) * canvas.height / rect.height);
+    return {
+      x: Math.max(0, Math.min(canvas.width - 1, x)),
+      y: Math.max(0, Math.min(canvas.height - 1, y)),
+    };
+  }
+  canvas.onmousedown = canvas.onmouseup = canvas.onmousemove = (ev) => {
+    const p = remotePoint(ev);
     let buttons = 0;
     if (ev.buttons & 1) buttons |= 1;
     if (ev.buttons & 4) buttons |= 2;
     if (ev.buttons & 2) buttons |= 4;
     const m = new Uint8Array(6);
-    m[0] = 5; m[1] = buttons; m[2] = x >> 8; m[3] = x & 255; m[4] = y >> 8; m[5] = y & 255;
+    m[0] = 5; m[1] = buttons; m[2] = p.x >> 8; m[3] = p.x & 255; m[4] = p.y >> 8; m[5] = p.y & 255;
     send(m);
   };
   canvas.oncontextmenu = (e) => e.preventDefault();
   canvas.onwheel = (ev) => {
     ev.preventDefault();
     const bit = ev.deltaY < 0 ? 8 : 16;
-    const rect = canvas.getBoundingClientRect();
-    const x = (ev.clientX - rect.left) * canvas.width / rect.width;
-    const y = (ev.clientY - rect.top) * canvas.height / rect.height;
+    const p = remotePoint(ev);
+    const x = p.x, y = p.y;
     for (const buttons of [bit, 0]) {
       const m = new Uint8Array(6);
       m[0] = 5; m[1] = buttons; m[2] = x >> 8; m[3] = x & 255; m[4] = y >> 8; m[5] = y & 255;
@@ -423,6 +466,7 @@ function startRFB(url, canvas, onError) {
   };
   const keys = { Escape: 0xff1b, Tab: 0xff09, Enter: 0xff0d, Backspace: 0xff08, Delete: 0xffff, Home: 0xff50, End: 0xff57, PageUp: 0xff55, PageDown: 0xff56, ArrowLeft: 0xff51, ArrowUp: 0xff52, ArrowRight: 0xff53, ArrowDown: 0xff54, ShiftLeft: 0xffe1, ShiftRight: 0xffe2, ControlLeft: 0xffe3, ControlRight: 0xffe4, AltLeft: 0xffe9, AltRight: 0xffea, MetaLeft: 0xffeb };
   canvas.onkeydown = canvas.onkeyup = (ev) => {
+    if (ev.code === "Escape" && document.fullscreenElement) return;
     ev.preventDefault();
     let sym = keys[ev.code];
     if (sym == null && ev.key.length === 1) sym = ev.key.codePointAt(0);

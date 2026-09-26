@@ -54,7 +54,7 @@ do
 done
 if [ -z "$ICON_SRC" ] && command -v curl >/dev/null 2>&1; then
   tmp="$(mktemp)"
-  if curl -fsSL -o "$tmp" "https://github.com/danieldonelon/keystone/releases/download/v0.1.1/keystone.png"; then
+  if curl -fsSL -o "$tmp" "https://github.com/danieldonelon/keystone/releases/download/v0.1.2/keystone.png"; then
     ICON_SRC="$tmp"
   else
     rm -f "$tmp"

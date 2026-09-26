@@ -43,7 +43,7 @@ Or double-click the Keystone icon on the desktop. The icon starts Keystone when 
 powershell -ExecutionPolicy Bypass -File scripts\install-windows-shortcut.ps1
 ```
 
-A browser opens at `http://127.0.0.1:8731`. The page shows the `keystone join` command for your other computers. The shared folder defaults to your home directory. Change it in the Files view. Light mode and Dark mode are in the header.
+A browser opens at `http://127.0.0.1:8731`. The page shows the `keystone join` command for your other computers. The shared folder defaults to your home directory. Change it in the Files view. Light mode and Dark mode are in the header. On Screen, the remote desktop keeps its shape, and Full screen uses the whole monitor.
 
 Leave this computer running. It is the coordinator the others register with.
 
@@ -60,7 +60,7 @@ docs/             Keystone-User-Manual.pdf
 scripts/          Windows shortcut, Pi installer, icon and manual builders
 ```
 
-Built programs stay out of git. Release [v0.1.1](https://github.com/danieldonelon/keystone/releases/tag/v0.1.1) carries the programs, the desktop icon, and the user manual.
+Built programs stay out of git. Release [v0.1.2](https://github.com/danieldonelon/keystone/releases/tag/v0.1.2) carries the programs, the desktop icon, and the user manual.
 
 ## Raspberry Pi
 
@@ -68,11 +68,11 @@ Built programs stay out of git. Release [v0.1.1](https://github.com/danieldonelo
 
 ```sh
 curl -fL -o keystone-linux-arm64 \
-  https://github.com/danieldonelon/keystone/releases/download/v0.1.1/keystone-linux-arm64
+  https://github.com/danieldonelon/keystone/releases/download/v0.1.2/keystone-linux-arm64
 curl -fL -o keystone.png \
-  https://github.com/danieldonelon/keystone/releases/download/v0.1.1/keystone.png
+  https://github.com/danieldonelon/keystone/releases/download/v0.1.2/keystone.png
 curl -fL -o install-pi.sh \
-  https://raw.githubusercontent.com/danieldonelon/keystone/v0.1.1/scripts/install-pi.sh
+  https://raw.githubusercontent.com/danieldonelon/keystone/v0.1.2/scripts/install-pi.sh
 chmod +x keystone-linux-arm64
 sudo KEYSTONE_HOME=/var/lib/keystone ./keystone-linux-arm64 join --name pi \
   --coordinator https://192.168.0.130:7707 --token TOKEN --pin PIN --share /home/pi

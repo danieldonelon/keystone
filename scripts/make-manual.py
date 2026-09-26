@@ -147,7 +147,7 @@ def header_footer(canvas, doc):
     canvas.line(54, 42, width - 54, 42)
     canvas.setFillColor(STEEL)
     canvas.setFont("Segoe", 8)
-    canvas.drawString(54, 28, "Version 0.1.1")
+    canvas.drawString(54, 28, "Version 0.1.2")
     canvas.drawRightString(width - 54, 28, str(doc.page))
     canvas.restoreState()
 
@@ -193,7 +193,7 @@ def story():
         bullets([
             "Machines lists this computer and every computer that has joined. A green dot means Keystone has heard from it recently.",
             "Files opens the shared folder on the computer you pick. You can open folders, download, upload, make a folder, and delete a file or an empty folder.",
-            "Screen shows that computer’s desktop and sends your mouse and keyboard there.",
+            "Screen shows that computer’s desktop. The picture keeps its shape. Full screen uses your whole monitor.",
             "Light mode and Dark mode are at the right of the header. The choice is remembered in this browser.",
         ]),
         P("The mark is black with a MojoSoMint mint outline, #0D0D0D and #7BFFEC, the same colors as the desktop icon."),
@@ -202,11 +202,11 @@ def story():
         P("On the Pi, download the program that matches the operating system, plus the installer. The commands below are for a 64-bit Pi. Replace the file name with keystone-linux-armv7 on a 32-bit Pi."),
         code(
             "curl -fL -o keystone-linux-arm64 \\\n"
-            "  https://github.com/danieldonelon/keystone/releases/download/v0.1.1/keystone-linux-arm64\n"
+            "  https://github.com/danieldonelon/keystone/releases/download/v0.1.2/keystone-linux-arm64\n"
             "curl -fL -o keystone.png \\\n"
-            "  https://github.com/danieldonelon/keystone/releases/download/v0.1.1/keystone.png\n"
+            "  https://github.com/danieldonelon/keystone/releases/download/v0.1.2/keystone.png\n"
             "curl -fL -o install-pi.sh \\\n"
-            "  https://raw.githubusercontent.com/danieldonelon/keystone/v0.1.1/scripts/install-pi.sh\n"
+            "  https://raw.githubusercontent.com/danieldonelon/keystone/v0.1.2/scripts/install-pi.sh\n"
             "chmod +x keystone-linux-arm64"
         ),
         P("Join before you install the service, using the command from the laptop’s Keystone window. Change the name and the shared folder if you want something other than pi and /home/pi."),
@@ -226,10 +226,11 @@ def story():
         P("Pick a computer, then Files. Click a folder to open it. Click a file to download it. Upload sends the files you choose into the folder you are viewing. New folder and Delete do what they say. Delete removes a file, or a folder only when the folder is empty. The shared folder itself cannot be deleted from the window."),
         P("Change, under the folder path, picks a different shared folder on that computer. The change is stored in that computer’s profile. A path outside the shared folder is refused."),
         P("Screen", "h1"),
-        P("Pick a computer, then Screen, then Connect. On the laptop, Keystone captures the desktop itself and you can move the pointer and type. On a Pi, Keystone connects to a VNC server on that Pi."),
+        P("Pick a computer, then Screen, then Connect. On the laptop, Keystone captures the desktop itself and you can move the pointer and type. On a Pi, or any other Linux computer, Keystone connects to a VNC server on that machine."),
         code("sudo apt install wayvnc"),
-        P("wayvnc is the usual choice on current Raspberry Pi OS. x11vnc works when the Pi is using an older X11 desktop. If the Pi already has a VNC server on 127.0.0.1 port 5900, Keystone uses that server. If the desktop asks for a VNC password, type it in the password box and connect again."),
-        P("The screen view is the remote desktop, so clicks and keys go to that computer while the picture has focus."),
+        P("wayvnc is the usual choice on current Raspberry Pi OS. x11vnc works when the Pi is using an older X11 desktop. If that computer already has a VNC server on 127.0.0.1 port 5900, Keystone uses that server. If the desktop asks for a VNC password, type it in the password box and connect again."),
+        P("The picture is scaled to the space you give it, and it keeps the other computer’s shape. A wide monitor in a taller window gets black bars above and below, rather than a stretched image. Your clicks land on the matching spot."),
+        P("Full screen hides the rest of Keystone and uses your monitor. Click Full screen, then Exit full screen, or press Escape. While you are in full screen, Escape stays on your computer so you can leave the view. It is not typed on the other computer until you are back in the page."),
         P("ExpressVPN", "h1"),
         P("ExpressVPN can stay on. It installs broad routes so ordinary programs leave through the VPN. Keystone does not remove those routes and does not send your browser around the VPN."),
         P("Keystone pins only its own tunnel socket to the physical adapter, such as Wi-Fi. On Linux it marks those packets and sends the marked packets through the physical adapter. The Keystone window says which adapter it is using."),
@@ -271,7 +272,7 @@ def story():
                 ["keystone up", "Start Keystone and open the window. --no-browser skips the window."],
                 ["keystone status", "Show whether Keystone is running."],
                 ["keystone doctor", "Check that the tunnel can bypass ExpressVPN."],
-                ["keystone version", "Print the version. This manual matches 0.1.1."],
+                ["keystone version", "Print the version. This manual matches 0.1.2."],
             ],
             [1.6 * inch, 5.4 * inch],
         ),
@@ -302,7 +303,7 @@ def story():
         P("A computer disappeared from the list.", "h2"),
         P("The dot goes dark after the computer stops sending updates. Check that its Keystone service or program is running, and that it can still reach the coordinator."),
         P("Source and license", "h1"),
-        P("The program source is at https://github.com/danieldonelon/keystone. Release v0.1.1 has the Windows program, both Pi programs, the icon, and this manual. Keystone’s own code is MIT. The WireGuard library it uses is MIT as well."),
+        P("The program source is at https://github.com/danieldonelon/keystone. Release v0.1.2 has the Windows program, both Pi programs, the icon, and this manual. Keystone’s own code is MIT. The WireGuard library it uses is MIT as well."),
     ]
     return parts
 
